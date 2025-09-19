@@ -1,13 +1,3 @@
-// to do : %p; +
-// todo передать имя файла +
-// todo refactor lcomp +
-// todo: прочитай что такое isalpha() +
-// todo: препроцессирование в отдельную функцию: +
-//       копировать в новый буфер +
-//       два указателя (если будешь успевать) - так как мне нужен буфер, в котором ничего не поменялось
-
-
-
 #include <stdio.h>
 #include <sys/stat.h>
 #include <cstdlib>
@@ -20,18 +10,14 @@
 struct line
 {
     size_t lengh;
-    size_t lenghfix;
     char* ptr;
-    char* ptrfix;
 };
 
 long long find_file_size(const char* file_name);
 
 size_t count_lines(char* buffer);
 
-void get_text(struct line*  text, char* fixed_buffer, char* buffer);
-
-void fix_buffer (char* fixed_buffer, const char* buffer);
+void get_text(struct line*  text, char* buffer);
 
 int lcomp(struct line* text, size_t line1, size_t line2);
 
@@ -50,10 +36,6 @@ int main()
     char* buffer = (char*) calloc(file_size0 + 1, sizeof(char));
     assert(buffer != NULL);
 
-
-
-
-
     int Onegin = open("OneginText1251.txt", O_RDONLY);
     assert(Onegin != 0);
 
@@ -63,18 +45,12 @@ int main()
 
     close(Onegin);
 
-    char* fixed_buffer = (char*) calloc(file_size, sizeof(char));
-    assert(fixed_buffer != 0);
-    fix_buffer(fixed_buffer, buffer);
-
-
-
     size_t linenum = count_lines(buffer);
     assert(linenum > 0);
 
     struct line* text = (struct line*) calloc(linenum, sizeof(line));
     assert(text != 0);
-    get_text(text, fixed_buffer, buffer);
+    get_text(text, buffer);
 
     bubblesort(text, linenum, lcomp);
 
@@ -115,7 +91,7 @@ int main()
 
     bubblesort(text, linenum, rcomp);
 
-        print_text(encyclopedia, text, linenum);
+    print_text(encyclopedia, text, linenum);
 
     fprintf(encyclopedia, "----------------------------------------------------------------------------------------------------------\n"
                           "\n"
@@ -131,11 +107,11 @@ int main()
                           "WRITERS, DON'T TAKE IT PERSONALLY. HERE IS YOUR ETERNAL PUSHKIN, WE HAVE NOT CHANGED ANYTHING.------------\n"
                           "\n"
                           "\n");
+    fputs(buffer, encyclopedia);
 
     fclose(encyclopedia);
 
     free(text);
-    free(fixed_buffer);
     free(buffer);
 }
 
@@ -146,7 +122,7 @@ long long find_file_size(const char* file_name)
 {
     assert (file_name != 0);
 
-    struct stat file_info;
+    struct stat file_info = {0};
     stat(file_name, &file_info);
 
     assert(file_info.st_size != 0);
@@ -172,27 +148,9 @@ size_t count_lines(char* buffer)
 }
 
 
-void fix_buffer (char* fixed_buffer, const char* buffer)
-{
-    assert (fixed_buffer != 0);
-    assert (buffer != 0);
-
-    size_t fix = 0;
-    for (size_t base = 0; buffer[base] != '\0'; base++) {
-        char c = buffer[base];
-        if (isalpha(c) != 0 || c == '\n') {
-            fixed_buffer[fix] = c;
-            fix++;
-        }
-    }
-    fixed_buffer[fix] = '\0';
-}
-
-
-void get_text(struct line* text, char* fixed_buffer, char* buffer)
+void get_text(struct line* text, char* buffer)
 {
     assert (text != 0);
-    assert (fixed_buffer != 0);
     assert (buffer != 0);
 
     size_t count = 0, ptr_shift = 0;
@@ -205,18 +163,6 @@ void get_text(struct line* text, char* fixed_buffer, char* buffer)
             count++;
         }
     }
-
-    size_t fixcount = 0, fixptr_shift = 0;
-
-    for (size_t i = 0; fixed_buffer[i] != '\0'; i++) {
-        if (fixed_buffer[i] == '\n') {
-            text[fixcount].ptrfix = fixed_buffer + fixptr_shift;
-            text[fixcount].lenghfix = (i + 1) - fixptr_shift;
-            fixptr_shift = i + 1;
-            fixcount++;
-        }
-    }
-    assert(fixcount == count);
 }
 
 
@@ -244,50 +190,75 @@ int lcomp(struct line* text, size_t line1, size_t line2)
 {
     assert(text != 0);
 
-    int pos = 0;
-    char *str1 = text[line1].ptrfix, *str2 = text[line2].ptrfix;
-    while (str1[pos] != '\n' && str2[pos] != '\n') {
-        char c1 = tolower(str1[pos]);
-        char c2 = tolower(str2[pos]);
+    int pos1 = 0, pos2 = 0;
+    char *str1 = text[line1].ptr, *str2 = text[line2].ptr;
 
-        if (c1 < c2) return 1;
-        if (c1 > c2) return -1;
+    while (str1[pos1] != '\n' || str2[pos2] != '\n') {
+        while (str1[pos1] != '\n' && !isalpha((unsigned char)str1[pos1])) {
+            pos1++;
+        }
 
-        pos++;
+        while (str2[pos2] != '\n' && !isalpha((unsigned char)str2[pos2])) {
+            pos2++;
+        }
+
+        if (str1[pos1] == '\n' || str2[pos2] == '\n') {
+            break;
+        }
+
+        char c1 = tolower((unsigned char)str1[pos1]);
+        char c2 = tolower((unsigned char)str2[pos2]);
+
+        if (c1 != c2) {
+            return c2 - c1;
+        }
+
+        pos1++;
+        pos2++;
     }
 
-    // Если одна строка короче другой (раньше заканчивается)
-    if (str1[pos] == '\n' && str2[pos] != '\n') return 1;
-    if (str2[pos] == '\n' && str1[pos] != '\n') return -1;
-
-    // Если строки идентичны
-    return 0;
-
+    return text[line2].lengh - text[line1].lengh;
 }
+
 
 
 int rcomp(struct line* text, size_t line1, size_t line2)
 {
     assert(text != 0);
 
-    char *str1 = text[line1].ptrfix, *str2 = text[line2].ptrfix;
-    size_t lengh1 = text[line1].lenghfix, lengh2 = text[line2].lenghfix;
+    char *str1 = text[line1].ptr;
+    char *str2 = text[line2].ptr;
+    int len1 = text[line1].lengh;
+    int len2 = text[line2].lengh;
 
-    for (size_t pos = 0; pos < (lengh2 - 1) && pos < (lengh2 - 1); pos++) {
-        // Берем символы с конца строк
-        int c1 = tolower(str1[lengh1 - 2 - pos]);
-        int c2 = tolower(str2[lengh2 - 2 - pos]);
+    int pos1 = len1 - 2;
+    int pos2 = len2 - 2;
 
-        if (c1 < c2) return 1;
-        if (c1 > c2) return -1;
+    while (pos1 >= 0 || pos2 >= 0) {
+        while (pos1 >= 0 && !isalpha((unsigned char)str1[pos1])) {
+            pos1--;
+        }
+
+        while (pos2 >= 0 && !isalpha((unsigned char)str2[pos2])) {
+            pos2--;
+        }
+
+        if (pos1 < 0 || pos2 < 0) {
+            break;
+        }
+
+        char c1 = tolower((unsigned char)str1[pos1]);
+        char c2 = tolower((unsigned char)str2[pos2]);
+
+        if (c1 != c2) {
+            return c2 - c1;
+        }
+
+        pos1--;
+        pos2--;
     }
 
-    // Если одна строка короче другой
-    if (lengh1 < lengh2) return 1;
-    if (lengh2 < lengh1) return -1;
-
-    // Если строки идентичны
-    return 0;
+    return len2 - len1;
 }
 
 
@@ -295,14 +266,14 @@ void change(struct line* text, size_t line1, size_t line2)
 {
     assert (text != 0);
 
-    char* s_ptr = text[line1].ptr, *s_ptrfix = text[line1].ptrfix;
-    size_t s_lengh = text[line1].lengh, s_lenghfix = text[line1].lenghfix;
+    char* s_ptr = text[line1].ptr;
+    size_t s_lengh = text[line1].lengh;
 
-    text[line1].ptr = text[line2].ptr; text[line1].ptrfix = text[line2].ptrfix;
-    text[line1].lengh = text[line2].lengh; text[line1].lenghfix = text[line2].lenghfix;
+    text[line1].ptr = text[line2].ptr;
+    text[line1].lengh = text[line2].lengh;
 
-    text[line2].ptr = s_ptr; text[line2].ptrfix = s_ptrfix;
-    text[line2].lengh = s_lengh; text[line2].lenghfix = s_lenghfix;
+    text[line2].ptr = s_ptr;
+    text[line2].lengh = s_lengh;
 }
 
 
@@ -317,3 +288,5 @@ void print_text(FILE* file, struct line* text, size_t linenum)
             fprintf(file, "%c", *(text[line].ptr + let));
     }
 }
+
+
