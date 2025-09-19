@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <assert.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct line
 {
@@ -19,15 +21,15 @@ size_t count_lines(char* buffer);
 
 void get_text(struct line*  text, char* buffer);
 
-int lcomp(struct line* text, size_t line1, size_t line2);
+int lcomp(const void* elem1, const void* elem2);
 
-int rcomp(struct line* text, size_t line1, size_t line2);
+int rcomp(const void* elem1, const void* elem2);
 
-void change(struct line* text, size_t line1, size_t line2);
+void bubblesort(void* text, size_t linenum, size_t size, int(* comp)(const void *elem1, const void *elem2));
 
-void bubblesort(struct line* text, size_t linenum, int(* comp)(struct line* text, size_t line1, size_t line2));
+void print_l_encyclopedia(FILE* stream, struct line* text, size_t linenum);
 
-void print_text(FILE* file, struct line* text, size_t linenum);
+void print_r_encyclopedia(FILE* stream, struct line* text, size_t linenum);
 
 int main()
 {
@@ -52,8 +54,6 @@ int main()
     assert(text != 0);
     get_text(text, buffer);
 
-    bubblesort(text, linenum, lcomp);
-
     FILE* encyclopedia = fopen("EncyclopediaOfRussianLive.txt", "w");
     assert(encyclopedia != 0);
 
@@ -67,44 +67,17 @@ int main()
                           "\n"
                           "\n"
                           "\n"
-                          "\n"
-                          "THE LEFT ENCYCLOPEDIA-------------------------------------------------------------------------------------\n"
-                          "\n"
                           "\n");
 
-    print_text(encyclopedia, text, linenum);
+    qsort(text, linenum, sizeof(struct line), lcomp);
 
-    fprintf(encyclopedia, "----------------------------------------------------------------------------------------------------------\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "==========================================================================================================\n"
-                          "==========================================================================================================\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "THE RIGHT ENCYCLOPEDIA-------------------------------------------------------------------------------------\n"
-                          "\n"
-                          "\n");
+    print_l_encyclopedia(encyclopedia, text, linenum);
 
-    bubblesort(text, linenum, rcomp);
+    qsort(text, linenum, sizeof(struct line), rcomp);
 
-    print_text(encyclopedia, text, linenum);
+    print_r_encyclopedia(encyclopedia, text, linenum);
 
-    fprintf(encyclopedia, "----------------------------------------------------------------------------------------------------------\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "==========================================================================================================\n"
-                          "==========================================================================================================\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "\n"
-                          "WRITERS, DON'T TAKE IT PERSONALLY. HERE IS YOUR ETERNAL PUSHKIN, WE HAVE NOT CHANGED ANYTHING.------------\n"
+    fprintf(encyclopedia, "WRITERS, DON'T TAKE IT PERSONALLY. HERE IS YOUR ETERNAL PUSHKIN, WE HAVE NOT CHANGED ANYTHING.------------\n"
                           "\n"
                           "\n");
     fputs(buffer, encyclopedia);
@@ -113,6 +86,8 @@ int main()
 
     free(text);
     free(buffer);
+
+    return 0;
 }
 
 
@@ -166,32 +141,42 @@ void get_text(struct line* text, char* buffer)
 }
 
 
-void bubblesort(struct line* text, size_t linenum, int(* comp)(struct line* text, size_t line1, size_t line2))
+void bubblesort(void* text, size_t linenum, size_t size, int(* comp)(const void* line1, const void* line2))
 {
     assert (text != 0);
     assert (comp != 0);
     assert (text != 0);
     assert (linenum > 0);
 
+    void* save = calloc(1, size);
+    assert (save != 0);
+
     for (size_t dlina_prohoda = linenum-1; dlina_prohoda > 1; dlina_prohoda--) {
         assert (dlina_prohoda<linenum);
         assert (dlina_prohoda > 1);
         for(size_t pos = 1; pos <= dlina_prohoda; pos++) {
             assert (pos <= dlina_prohoda);
-            if (comp(text, pos-1, pos) < 0) {
-                change(text, pos-1, pos);
+            if (comp((char*)text + (pos-1)*size, (char*)text + pos*size) > 0) {
+                memcpy(save, (char*)text + (pos-1)*size, size);
+                memcpy((char*)text + (pos-1)*size, (char*)text + pos*size, size);
+                memcpy((char*)text + pos*size, save, size);
             }
         }
     }
+    free(save);
 }
 
 
-int lcomp(struct line* text, size_t line1, size_t line2)
+int lcomp(const void* elem1, const void* elem2)
 {
-    assert(text != 0);
+    assert(elem1 != 0);
+    assert(elem2 != 0);
+
+    const struct line *line1 = (const struct line*) elem1;
+    const struct line *line2 = (const struct line*) elem2;
 
     int pos1 = 0, pos2 = 0;
-    char *str1 = text[line1].ptr, *str2 = text[line2].ptr;
+    char *str1 = line1->ptr, *str2 = line2->ptr;
 
     while (str1[pos1] != '\n' || str2[pos2] != '\n') {
         while (str1[pos1] != '\n' && !isalpha((unsigned char)str1[pos1])) {
@@ -210,26 +195,31 @@ int lcomp(struct line* text, size_t line1, size_t line2)
         char c2 = tolower((unsigned char)str2[pos2]);
 
         if (c1 != c2) {
-            return c2 - c1;
+            return c1 - c2;
         }
 
         pos1++;
         pos2++;
     }
 
-    return text[line2].lengh - text[line1].lengh;
+    return line1->lengh - line2->lengh;
 }
 
 
 
-int rcomp(struct line* text, size_t line1, size_t line2)
+int rcomp(const void* elem1, const void* elem2)
 {
-    assert(text != 0);
+    assert(elem1 != 0);
+    assert(elem2 != 0);
 
-    char *str1 = text[line1].ptr;
-    char *str2 = text[line2].ptr;
-    int len1 = text[line1].lengh;
-    int len2 = text[line2].lengh;
+    const struct line *line1 = (const struct line *)elem1;
+    const struct line *line2 = (const struct line *)elem2;
+
+    char *str1 = line1->ptr;
+    char *str2 = line2->ptr;
+
+    int len1 = line1->lengh;
+    int len2 = line2->lengh;
 
     int pos1 = len1 - 2;
     int pos2 = len2 - 2;
@@ -251,42 +241,100 @@ int rcomp(struct line* text, size_t line1, size_t line2)
         char c2 = tolower((unsigned char)str2[pos2]);
 
         if (c1 != c2) {
-            return c2 - c1;
+            return c1 - c2;
         }
 
         pos1--;
         pos2--;
     }
 
-    return len2 - len1;
+    return len1 - len2;
 }
 
 
-void change(struct line* text, size_t line1, size_t line2)
+
+
+void print_l_encyclopedia(FILE* stream, struct line* text, size_t linenum)
 {
-    assert (text != 0);
-
-    char* s_ptr = text[line1].ptr;
-    size_t s_lengh = text[line1].lengh;
-
-    text[line1].ptr = text[line2].ptr;
-    text[line1].lengh = text[line2].lengh;
-
-    text[line2].ptr = s_ptr;
-    text[line2].lengh = s_lengh;
-}
-
-
-void print_text(FILE* file, struct line* text, size_t linenum)
-{
-    assert (file != 0);
+    assert (stream != 0);
     assert (text != 0);
     assert (linenum != 0);
 
+    char current_sym = 0;
+
+    fprintf(stream, "THE LEFT ENCYCLOPEDIA-------------------------------------------------------------------------------------\n");
+
     for (size_t line = 0; line < linenum; line++) {
-        for (size_t let = 0; let < text[line].lengh; let++)
-            fprintf(file, "%c", *(text[line].ptr + let));
+        size_t sym = 0;
+        while (!isalpha((*(text[line].ptr + sym))) && sym < text[line].lengh) {
+            sym++;
+        }
+        if (toupper(*(text[line].ptr + sym)) != current_sym) {
+            current_sym = toupper(*(text[line].ptr + sym));
+            fprintf(stream, "\n"
+                            "\n"
+                            "                                       %c\n"
+                            "\n"
+                            "\n",
+                            current_sym);
+        }
+        for (size_t let = 0; let < text[line].lengh; let++) {
+            fprintf(stream, "%c", *(text[line].ptr + let));
+        }
     }
+
+    fprintf(stream, "----------------------------------------------------------------------------------------------------------\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "==========================================================================================================\n"
+                          "==========================================================================================================\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "\n");
 }
 
 
+void print_r_encyclopedia(FILE* stream, struct line* text, size_t linenum)
+{
+    assert (stream != 0);
+    assert (text != 0);
+    assert (linenum != 0);
+
+    char current_sym = 0;
+
+    fprintf(stream, "THE RIGHT ENCYCLOPEDIA-------------------------------------------------------------------------------------\n");
+
+    for (size_t line = 0; line < linenum; line++) {
+        size_t sym = 0;
+        while (!isalpha((*(text[line].ptr + text[line].lengh - 2 - sym))) && sym < text[line].lengh - 1) {
+            sym++;
+        }
+        if (toupper(*(text[line].ptr + text[line].lengh - 2 - sym)) != current_sym) {
+            current_sym = toupper(*(text[line].ptr + text[line].lengh - 2 - sym));
+            fprintf(stream, "\n"
+                            "\n"
+                            "                                       %c\n"
+                            "\n"
+                            "\n",
+                            current_sym);
+        }
+        for (size_t let = 0; let < text[line].lengh; let++) {
+            fprintf(stream, "%c", *(text[line].ptr + let));
+        }
+    }
+
+    fprintf(stream, "----------------------------------------------------------------------------------------------------------\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "==========================================================================================================\n"
+                          "==========================================================================================================\n"
+                          "\n"
+                          "\n"
+                          "\n"
+                          "\n");
+}
